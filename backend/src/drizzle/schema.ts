@@ -7,6 +7,7 @@ import {
     integer,
     pgEnum,
     customType,
+    jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -85,8 +86,22 @@ export const documents = pgTable("documents", {
         .notNull()
         .references(() => users.id, { onDelete: "cascade" }),
     binaryContent: bytea("binaryContent"), // Y.js update vector
+    currentContent: jsonb("currentContent"), // Latest readable JSON state
     createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+});
+
+export const documentVersions = pgTable("document_versions", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("documentId")
+        .notNull()
+        .references(() => documents.id, { onDelete: "cascade" }),
+    content: jsonb("content").notNull(), // Stores the Tiptap JSON
+    versionName: text("versionName"), // Optional e.g., 'Draft 1'
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+    createdBy: uuid("createdBy")
+        .notNull()
+        .references(() => users.id),
 });
 
 export const documentAccess = pgTable("document_access", {
@@ -109,6 +124,7 @@ export const usersRelations = relations(users, ({ many }) => ({
     sessions: many(sessions),
     documents: many(documents),
     sharedDocuments: many(documentAccess),
+    createdVersions: many(documentVersions),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -131,6 +147,18 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
         references: [users.id],
     }),
     accessList: many(documentAccess),
+    versions: many(documentVersions),
+}));
+
+export const documentVersionsRelations = relations(documentVersions, ({ one }) => ({
+    document: one(documents, {
+        fields: [documentVersions.documentId],
+        references: [documents.id],
+    }),
+    creator: one(users, {
+        fields: [documentVersions.createdBy],
+        references: [users.id],
+    }),
 }));
 
 export const documentAccessRelations = relations(documentAccess, ({ one }) => ({

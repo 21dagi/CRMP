@@ -1,53 +1,24 @@
-"use client";
-
 import Link from "next/link";
-import { useAuth } from "@/hooks/use-auth";
-import { signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { fetchWithAuth } from "@/lib/api";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { UserMenu } from "@/components/dashboard/user-menu";
+import { CreateDocumentButton } from "@/components/dashboard/create-document-button";
 
-const MOCK_DOCUMENTS = [
-    { id: "1", title: "Project Proposal", date: "2023-10-01" },
-    { id: "2", title: "Budget Draft", date: "2023-10-05" },
-];
+export default async function DashboardPage() {
+    const session = await getServerSession(authOptions);
 
-export default function DashboardPage() {
-    const { user, isAuthenticated, isLoading } = useAuth();
-    const router = useRouter();
-    const [showDropdown, setShowDropdown] = useState(false);
-
-    useEffect(() => {
-        if (!isLoading && !isAuthenticated) {
-            router.push("/auth/signin");
-        }
-    }, [isAuthenticated, isLoading, router]);
-
-    const handleCreateNew = () => {
-        console.log("Create new clicked");
-    };
-
-    const handleSignOut = async () => {
-        await signOut({ redirect: false });
-        router.push("/");
-    };
-
-    if (isLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-zinc-950">
-                <div className="text-gray-600 dark:text-gray-400">Loading...</div>
-            </div>
-        );
+    if (!session) {
+        redirect("/auth/signin");
     }
 
-    if (!isAuthenticated) {
-        return null;
+    let documents = [];
+    try {
+        documents = await fetchWithAuth("/documents");
+    } catch (error) {
+        console.error("Error fetching documents:", error);
     }
-
-    const userInitials = user?.name
-        ?.split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase() || "U";
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 font-sans">
@@ -58,33 +29,7 @@ export default function DashboardPage() {
                         CRMP
                     </div>
                 </div>
-                <div className="flex items-center gap-4 relative">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {user?.email}
-                    </span>
-                    <button
-                        onClick={() => setShowDropdown(!showDropdown)}
-                        className="h-8 w-8 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-sm font-medium text-white cursor-pointer hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
-                    >
-                        {userInitials}
-                    </button>
-                    {showDropdown && (
-                        <div className="absolute right-0 top-12 w-48 bg-white dark:bg-zinc-800 rounded-md shadow-lg border border-gray-200 dark:border-zinc-700 py-1 z-10">
-                            <div className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-zinc-700">
-                                <div className="font-medium">{user?.name}</div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {user?.email}
-                                </div>
-                            </div>
-                            <button
-                                onClick={handleSignOut}
-                                className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-zinc-700"
-                            >
-                                Sign Out
-                            </button>
-                        </div>
-                    )}
-                </div>
+                <UserMenu user={session.user} />
             </nav>
 
             {/* Main Content */}
@@ -94,40 +39,47 @@ export default function DashboardPage() {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                         My Documents
                     </h1>
-                    <button
-                        onClick={handleCreateNew}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                        + Create New
-                    </button>
+                    <CreateDocumentButton />
                 </div>
 
-                {/* Document Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {MOCK_DOCUMENTS.map((doc) => (
-                        <div
-                            key={doc.id}
-                            className="bg-white dark:bg-zinc-900 rounded-lg border border-gray-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col justify-between"
-                        >
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                                    {doc.title}
-                                </h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    Last edited: {doc.date}
-                                </p>
+                {/* Document Grid / Empty State */}
+                {documents.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-zinc-900 rounded-lg border border-dashed border-gray-300 dark:border-zinc-800">
+                        <div className="text-gray-400 mb-4 text-5xl">📄</div>
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                            You have no documents
+                        </h3>
+                        <p className="text-gray-500 dark:text-gray-400 mt-2">
+                            Create your first research document to get started.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {documents.map((doc: any) => (
+                            <div
+                                key={doc.id}
+                                className="bg-white dark:bg-zinc-900 rounded-lg border border-gray-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col justify-between"
+                            >
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 truncate">
+                                        {doc.title}
+                                    </h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        Last edited: {new Date(doc.updatedAt).toLocaleDateString()}
+                                    </p>
+                                </div>
+                                <div className="mt-4 flex justify-end">
+                                    <Link
+                                        href={`/documents/${doc.id}/editor`}
+                                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
+                                    >
+                                        Open →
+                                    </Link>
+                                </div>
                             </div>
-                            <div className="mt-4 flex justify-end">
-                                <Link
-                                    href={`/documents/${doc.id}/editor`}
-                                    className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
-                                >
-                                    Open →
-                                </Link>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )}
             </main>
         </div>
     );
